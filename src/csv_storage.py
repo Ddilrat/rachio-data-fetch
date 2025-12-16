@@ -53,6 +53,7 @@ class CSVStorage:
 
         # Define CSV columns
         fieldnames = [
+            'controller_name',
             'event_id',
             'event_type',
             'device_id',
@@ -98,6 +99,7 @@ class CSVStorage:
 
         # Define CSV columns (same as save_zone_events)
         fieldnames = [
+            'controller_name',
             'event_id',
             'event_type',
             'device_id',
@@ -150,13 +152,14 @@ class CSVStorage:
 
         return events
 
-    def get_latest_event_time(self, filepath: str) -> int:
+    def get_latest_event_time(self, filepath: str, device_id: str = None) -> int:
         """
         Get the timestamp of the most recent event in a CSV file.
         Useful for incremental data fetching.
 
         Args:
             filepath: Path to CSV file
+            device_id: Optional device ID to filter by (for single-file mode)
 
         Returns:
             Unix epoch milliseconds of the most recent event, or None if file doesn't exist
@@ -171,6 +174,10 @@ class CSVStorage:
         # Find the maximum event_date or create_date
         max_time = 0
         for event in events:
+            # If device_id is specified, only consider events from that device
+            if device_id and event.get('device_id') != device_id:
+                continue
+
             event_time = event.get('event_date') or event.get('create_date')
             if event_time:
                 try:

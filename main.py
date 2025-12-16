@@ -35,7 +35,7 @@ def fetch_and_save_data(
     incremental: bool = False
 ):
     """
-    Fetch zone run data from all configured controllers and save to CSV.
+    Fetch zone run data from all configured controllers and save to a single CSV file.
 
     Args:
         config: Configuration dictionary
@@ -50,7 +50,15 @@ def fetch_and_save_data(
         print("Error: No controllers configured in config.json")
         sys.exit(1)
 
+    # Single CSV file for all controllers
+    csv_filename = "rachio_zone_runs.csv"
+    csv_filepath = f"{config.get('output_directory', 'data')}/{csv_filename}"
+
     print(f"Fetching data for {len(controllers)} controller(s)...")
+    print(f"Output file: {csv_filepath}")
+
+    all_events = []
+    summary_by_controller = {}
 
     for controller in controllers:
         name = controller.get('name', 'Unknown')
@@ -78,18 +86,15 @@ def fetch_and_save_data(
             # Determine time range
             end_time = datetime_to_epoch_ms(datetime.now())
 
-            # Check if we should do incremental fetch
-            csv_filename = f"{name.replace(' ', '_')}_zone_runs.csv"
-            csv_filepath = f"{config.get('output_directory', 'data')}/{csv_filename}"
-
             if incremental:
-                last_event_time = storage.get_latest_event_time(csv_filepath)
+                # Get last event time for this specific device from the shared CSV
+                last_event_time = storage.get_latest_event_time(csv_filepath, device_id)
                 if last_event_time:
                     start_time = last_event_time + 1  # Start from 1ms after last event
                     print(f"Incremental fetch from {datetime.fromtimestamp(start_time/1000)}")
                 else:
                     start_time = datetime_to_epoch_ms(datetime.now() - timedelta(days=days))
-                    print(f"No existing data found, fetching last {days} days")
+                    print(f"No existing data found for this controller, fetching last {days} days")
             else:
                 start_time = datetime_to_epoch_ms(datetime.now() - timedelta(days=days))
                 print(f"Fetching last {days} days of data")
@@ -102,33 +107,61 @@ def fetch_and_save_data(
             print(f"Found {len(zone_events)} zone run events")
 
             if zone_events:
-                # Parse events
+                # Parse events and add controller name
                 parsed_events = [client.parse_zone_event(event) for event in zone_events]
+                for event in parsed_events:
+                    event['controller_name'] = name
 
-                # Save to CSV
-                if incremental and storage.get_latest_event_time(csv_filepath):
-                    storage.append_zone_events(parsed_events, csv_filepath)
-                else:
-                    storage.save_zone_events(parsed_events, name, csv_filename)
+                all_events.extend(parsed_events)
 
-                # Print summary
-                print("\nSummary:")
+                # Build summary
                 zone_summary = {}
                 for event in parsed_events:
                     zone_name = event.get('zone_name', 'Unknown')
                     zone_summary[zone_name] = zone_summary.get(zone_name, 0) + 1
 
+                summary_by_controller[name] = {
+                    'total_events': len(parsed_events),
+                    'zones': zone_summary
+                }
+
+                print(f"\nFound {len(parsed_events)} events:")
                 for zone_name, count in sorted(zone_summary.items()):
                     print(f"  {zone_name}: {count} events")
-
             else:
                 print("No zone run events found in the specified time range")
+                summary_by_controller[name] = {
+                    'total_events': 0,
+                    'zones': {}
+                }
 
         except Exception as e:
             print(f"Error processing {name}: {str(e)}")
             import traceback
             traceback.print_exc()
             continue
+
+    # Save all events to single CSV file
+    if all_events:
+        print(f"\n{'='*60}")
+        print(f"Saving {len(all_events)} total events to CSV...")
+        print(f"{'='*60}")
+
+        if incremental and storage.get_latest_event_time(csv_filepath):
+            storage.append_zone_events(all_events, csv_filepath)
+        else:
+            storage.save_zone_events(all_events, "all_controllers", csv_filename)
+
+        # Print overall summary
+        print("\n" + "="*60)
+        print("Summary by Controller:")
+        print("="*60)
+        for controller_name, summary in summary_by_controller.items():
+            print(f"\n{controller_name}: {summary['total_events']} events")
+            for zone_name, count in sorted(summary['zones'].items()):
+                print(f"  {zone_name}: {count} events")
+    else:
+        print("\nNo events to save.")
 
     print(f"\n{'='*60}")
     print("Data collection complete!")

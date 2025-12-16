@@ -105,9 +105,17 @@ python main.py --days 14 --incremental
 
 ## Output
 
-Data is saved to CSV files in the `data/` directory (configurable in `config.json`).
+All data from all controllers is saved to a **single CSV file**: `data/rachio_zone_runs.csv` (directory configurable in `config.json`).
 
-CSV files include the following columns:
+This single-file approach makes it easy to:
+- Query across all controllers and zones
+- Import into databases (single table)
+- Analyze watering patterns across your entire system
+- No file size concerns (CSV files can handle millions of rows)
+
+### CSV Columns
+
+- `controller_name`: Name of the controller (from config.json)
 - `event_id`: Unique identifier for the event
 - `event_type`: Type of event (STARTED, COMPLETED, STOPPED)
 - `device_id`: Controller device ID
@@ -146,11 +154,12 @@ The Rachio API allows a maximum of **3,500 requests per day** across all endpoin
 
 ## Future Enhancements
 
-- Automatic upload to web-hosted SQL database
+- Automatic upload to web-hosted SQL database (single table design ready)
 - Real-time data collection using webhooks
 - Data visualization and reporting
 - Support for flow meter data analysis
 - Water usage analytics
+- Automated anomaly detection (e.g., leaks, unusual watering patterns)
 
 ## Project Structure
 
