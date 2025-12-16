@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Configuration with secrets
+config.json
+
+# Data files
+data/
+*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

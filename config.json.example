@@ -1,0 +1,16 @@
+{
+  "controllers": [
+    {
+      "name": "Controller 1",
+      "device_id": "your-device-id-here",
+      "api_key": "your-api-key-here"
+    },
+    {
+      "name": "Controller 2",
+      "device_id": "your-device-id-here",
+      "api_key": "your-api-key-here"
+    }
+  ],
+  "output_directory": "data",
+  "base_url": "https://api.rach.io/1"
+}
