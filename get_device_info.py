@@ -9,9 +9,27 @@ import requests
 import json
 
 
-def get_user_devices(api_key: str) -> dict:
-    """Get information about the user's devices."""
+def get_person_id(api_key: str) -> str:
+    """Get the person ID for the authenticated user."""
     url = "https://api.rach.io/1/public/person/info"
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json'
+    }
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        return data.get('id')
+    except requests.exceptions.RequestException as e:
+        print(f"Error getting person ID: {e}")
+        return None
+
+
+def get_user_devices(api_key: str, person_id: str) -> dict:
+    """Get information about the user's devices using person ID."""
+    url = f"https://api.rach.io/1/public/person/{person_id}"
     headers = {
         'Authorization': f'Bearer {api_key}',
         'Content-Type': 'application/json'
@@ -22,7 +40,7 @@ def get_user_devices(api_key: str) -> dict:
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        print(f"Error: {e}")
+        print(f"Error getting user devices: {e}")
         return None
 
 
@@ -47,11 +65,24 @@ def main():
         sys.exit(1)
 
     print()
-    print("Fetching your device information...")
+    print("Step 1: Fetching person ID...")
     print()
 
-    # Get user info and devices
-    user_info = get_user_devices(api_key)
+    # Get person ID first
+    person_id = get_person_id(api_key)
+
+    if not person_id:
+        print("Failed to retrieve person ID.")
+        print("Please check your API key and try again.")
+        sys.exit(1)
+
+    print(f"Person ID: {person_id}")
+    print()
+    print("Step 2: Fetching device information...")
+    print()
+
+    # Get user info and devices using person ID
+    user_info = get_user_devices(api_key, person_id)
 
     if not user_info:
         print("Failed to retrieve device information.")
@@ -59,9 +90,8 @@ def main():
         sys.exit(1)
 
     # Display user information
-    person = user_info.get('person', {})
-    print(f"User: {person.get('fullName', 'N/A')}")
-    print(f"Email: {person.get('username', 'N/A')}")
+    print(f"User: {user_info.get('fullName', 'N/A')}")
+    print(f"Email: {user_info.get('email', 'N/A')}")
     print()
 
     # Display devices
