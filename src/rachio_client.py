@@ -80,12 +80,13 @@ class RachioClient:
         end_time: Optional[int] = None
     ) -> List[Dict]:
         """
-        Get zone run events (started, completed, stopped) for a device.
+        Get zone run completion events for a device.
 
-        Filters events to only include zone run related events:
-        - DEVICE_ZONE_RUN_STARTED_EVENT
-        - DEVICE_ZONE_RUN_COMPLETED_EVENT
-        - DEVICE_ZONE_RUN_STOPPED_EVENT
+        Filters events to only include completed zone runs (ZONE_COMPLETED)
+        which contain the actual runtime duration information.
+
+        Automatically chunks requests into 35-day segments to work around
+        Rachio API's undocumented time range limit.
 
         Args:
             device_id: The unique identifier for the device
@@ -93,19 +94,44 @@ class RachioClient:
             end_time: End time in Unix epoch milliseconds
 
         Returns:
-            List of zone run event dictionaries with relevant fields
+            List of zone run completion event dictionaries with runtime data
         """
-        all_events = self.get_device_events(device_id, start_time, end_time)
+        # Calculate time range in days
+        RACHIO_MAX_DAYS = 35  # Rachio API limit (undocumented)
+        MAX_TIME_RANGE_MS = RACHIO_MAX_DAYS * 24 * 60 * 60 * 1000
 
-        zone_run_event_types = {
-            'DEVICE_ZONE_RUN_STARTED_EVENT',
-            'DEVICE_ZONE_RUN_COMPLETED_EVENT',
-            'DEVICE_ZONE_RUN_STOPPED_EVENT'
-        }
+        # Set defaults if not provided
+        if end_time is None:
+            end_time = int(time.time() * 1000)
+        if start_time is None:
+            start_time = int((time.time() - (7 * 24 * 60 * 60)) * 1000)
+
+        time_range_ms = end_time - start_time
+
+        # If range is within limit, make single request
+        if time_range_ms <= MAX_TIME_RANGE_MS:
+            all_events = self.get_device_events(device_id, start_time, end_time)
+        else:
+            # Chunk into multiple requests
+            print(f"Time range exceeds {RACHIO_MAX_DAYS} days, chunking into multiple requests...")
+            all_events = []
+            current_start = start_time
+            chunk_count = 0
+
+            while current_start < end_time:
+                current_end = min(current_start + MAX_TIME_RANGE_MS, end_time)
+                chunk_count += 1
+
+                print(f"  Fetching chunk {chunk_count}: {datetime.fromtimestamp(current_start/1000)} to {datetime.fromtimestamp(current_end/1000)}")
+                chunk_events = self.get_device_events(device_id, current_start, current_end)
+                all_events.extend(chunk_events)
+
+                # Move to next chunk (add 1ms to avoid overlap)
+                current_start = current_end + 1
 
         zone_events = []
         for event in all_events:
-            if event.get('type') in zone_run_event_types:
+            if event.get('type') == 'ZONE_STATUS' and event.get('subType') == 'ZONE_COMPLETED':
                 zone_events.append(event)
 
         return zone_events
@@ -120,8 +146,11 @@ class RachioClient:
         Returns:
             Parsed event with standardized fields
         """
+        import re
+
         event_type = event.get('type', '')
         subType = event.get('subType', '')
+        summary = event.get('summary', '')
 
         # Extract common fields
         parsed = {
@@ -130,18 +159,46 @@ class RachioClient:
             'sub_type': subType,
             'device_id': event.get('deviceId'),
             'event_date': event.get('eventDate'),
-            'create_date': event.get('createDate')
+            'create_date': event.get('createDate'),
+            'zone_id': None,
+            'zone_number': None,
+            'zone_name': None,
+            'duration_seconds': None,
+            'start_time': None,
+            'end_time': None,
+            'flow_volume_gallons': None,
+            'topic': event.get('topic'),
+            'summary': summary
         }
 
-        # Extract zone-specific data from subType object
-        if isinstance(subType, dict):
-            parsed['zone_id'] = subType.get('zoneId')
-            parsed['zone_number'] = subType.get('zoneNumber')
-            parsed['zone_name'] = subType.get('zoneName')
-            parsed['duration_seconds'] = subType.get('durationSeconds')
-            parsed['start_time'] = subType.get('startTime')
-            parsed['end_time'] = subType.get('endTime')
-            parsed['flow_volume_gallons'] = subType.get('flowVolumeG')
+        # Parse zone information from summary text
+        # Examples:
+        # "grass completed watering at 07:10 AM (CST) for 3 minutes."
+        # "Zone 2 began watering at 07:01 AM (CST)."
+        # "front began watering at 06:58 AM (CST)."
+
+        # Extract zone name (everything before "completed" or "began")
+        zone_match = re.match(r'^(.+?)\s+(completed|began)\s+watering', summary)
+        if zone_match:
+            parsed['zone_name'] = zone_match.group(1).strip()
+
+        # Extract duration from "for X minutes"
+        duration_match = re.search(r'for\s+(\d+)\s+minutes?', summary)
+        if duration_match:
+            duration_minutes = int(duration_match.group(1))
+            parsed['duration_seconds'] = duration_minutes * 60
+
+        # For ZONE_STARTED events, use eventDate as start_time
+        if subType == 'ZONE_STARTED':
+            parsed['start_time'] = event.get('eventDate')
+
+        # For ZONE_COMPLETED events, use eventDate as end_time
+        if subType == 'ZONE_COMPLETED':
+            end_time_ms = event.get('eventDate')
+            parsed['end_time'] = end_time_ms
+            # Add human-readable datetime
+            if end_time_ms:
+                parsed['end_time_datetime'] = epoch_ms_to_datetime(end_time_ms).strftime('%Y-%m-%d %H:%M:%S')
 
         return parsed
 

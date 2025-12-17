@@ -51,22 +51,18 @@ class CSVStorage:
 
         filepath = os.path.join(self.output_directory, filename)
 
-        # Define CSV columns
+        # Define CSV columns (only useful fields)
         fieldnames = [
             'controller_name',
-            'event_id',
-            'event_type',
             'device_id',
-            'zone_id',
-            'zone_number',
             'zone_name',
             'duration_seconds',
-            'start_time',
             'end_time',
-            'event_date',
-            'create_date',
-            'flow_volume_gallons',
-            'sub_type'
+            'end_time_datetime',
+            'csv_written_datetime',
+            'topic',
+            'summary',
+            'event_id'
         ]
 
         # Write to CSV
@@ -85,6 +81,7 @@ class CSVStorage:
     ) -> str:
         """
         Append zone run events to an existing CSV file.
+        Filters out events with IDs that already exist in the file.
 
         Args:
             events: List of parsed zone event dictionaries
@@ -97,22 +94,35 @@ class CSVStorage:
             print("No events to append")
             return filepath
 
+        # Get existing event IDs to prevent duplicates
+        existing_event_ids = set()
+        if os.path.isfile(filepath):
+            existing_events = self.read_zone_events(filepath)
+            existing_event_ids = {event.get('event_id') for event in existing_events if event.get('event_id')}
+
+        # Filter out events that already exist
+        new_events = [event for event in events if event.get('event_id') not in existing_event_ids]
+
+        if not new_events:
+            print("No new events to append (all events already exist)")
+            return filepath
+
+        duplicate_count = len(events) - len(new_events)
+        if duplicate_count > 0:
+            print(f"Filtered out {duplicate_count} duplicate event(s)")
+
         # Define CSV columns (same as save_zone_events)
         fieldnames = [
             'controller_name',
-            'event_id',
-            'event_type',
             'device_id',
-            'zone_id',
-            'zone_number',
             'zone_name',
             'duration_seconds',
-            'start_time',
             'end_time',
-            'event_date',
-            'create_date',
-            'flow_volume_gallons',
-            'sub_type'
+            'end_time_datetime',
+            'csv_written_datetime',
+            'topic',
+            'summary',
+            'event_id'
         ]
 
         # Check if file exists
@@ -126,9 +136,9 @@ class CSVStorage:
             if not file_exists:
                 writer.writeheader()
 
-            writer.writerows(events)
+            writer.writerows(new_events)
 
-        print(f"Appended {len(events)} events to {filepath}")
+        print(f"Appended {len(new_events)} events to {filepath}")
         return filepath
 
     def read_zone_events(self, filepath: str) -> List[Dict]:
@@ -171,14 +181,14 @@ class CSVStorage:
         if not events:
             return None
 
-        # Find the maximum event_date or create_date
+        # Find the maximum end_time
         max_time = 0
         for event in events:
             # If device_id is specified, only consider events from that device
             if device_id and event.get('device_id') != device_id:
                 continue
 
-            event_time = event.get('event_date') or event.get('create_date')
+            event_time = event.get('end_time')
             if event_time:
                 try:
                     time_val = int(event_time)

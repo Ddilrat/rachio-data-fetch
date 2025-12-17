@@ -109,8 +109,10 @@ def fetch_and_save_data(
             if zone_events:
                 # Parse events and add controller name
                 parsed_events = [client.parse_zone_event(event) for event in zone_events]
+                csv_write_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 for event in parsed_events:
                     event['controller_name'] = name
+                    event['csv_written_datetime'] = csv_write_time
 
                 all_events.extend(parsed_events)
 
