@@ -51,7 +51,7 @@ def fetch_and_save_data(
         sys.exit(1)
 
     # Single CSV file for all controllers
-    csv_filename = "rachio_zone_runs.csv"
+    csv_filename = "events.csv"
     csv_filepath = f"{config.get('output_directory', 'data')}/{csv_filename}"
 
     print(f"Fetching data for {len(controllers)} controller(s)...")
