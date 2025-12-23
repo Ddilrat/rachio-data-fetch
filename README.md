@@ -5,14 +5,15 @@ Automatically collect and store station run time data from Rachio water controll
 ## Features
 
 - Fetch zone/station run time data from multiple Rachio controllers
-- Store event data in CSV format for easy analysis
+- Store event data in CSV format and/or SQLite database
 - Fetch and store comprehensive device information in JSON format
 - Support for incremental data collection (only fetch new data)
 - Configurable time ranges for historical data retrieval
 - Automatic request chunking to handle API time range limits
 - Duplicate event detection and prevention
 - Device discovery utility to find controller IDs
-- Designed for easy migration to SQL database in the future
+- SQL database support with automatic indexing for fast queries
+- Query and analyze data using SQL
 
 ## Prerequisites
 
@@ -61,9 +62,19 @@ Edit `config.json` with your controller information:
     }
   ],
   "output_directory": "data",
-  "base_url": "https://api.rach.io/1"
+  "base_url": "https://api.rach.io/1",
+  "database_path": "data/rachio_events.db",
+  "storage_mode": "both"
 }
 ```
+
+### Configuration Options
+
+- `storage_mode`: Controls where data is stored. Options:
+  - `"both"` - Write to both CSV and SQL database (default, recommended)
+  - `"csv"` - Write only to CSV files
+  - `"sql"` - Write only to SQL database
+- `database_path`: Path to SQLite database file (default: `data/rachio_events.db`)
 
 ### Finding Your Device ID
 
@@ -134,9 +145,17 @@ python main.py --days 14 --incremental
 
 ## Output
 
+### Storage Modes
+
+The application can store data in three different modes (configured via `storage_mode` in [config.json](config.json)):
+
+1. **both** (default): Saves to both CSV and SQL database
+2. **csv**: Saves only to CSV files
+3. **sql**: Saves only to SQL database
+
 ### Event Data (CSV)
 
-All event data from all controllers is saved to a **single CSV file**: `data/events.csv` (directory configurable in `config.json`).
+When CSV storage is enabled, all event data from all controllers is saved to a **single CSV file**: `data/events.csv` (directory configurable in `config.json`).
 
 This single-file approach makes it easy to:
 - Query across all controllers and zones
@@ -190,6 +209,79 @@ Each device includes comprehensive information such as:
 - Location and timezone data
 - Hardware and firmware details
 
+### Event Data (SQL Database)
+
+When SQL storage is enabled, events are stored in a SQLite database at the path specified by `database_path` in [config.json](config.json) (default: `data/rachio_events.db`).
+
+#### Database Schema
+
+The `zone_events` table contains:
+- `event_id` (TEXT, PRIMARY KEY) - Unique identifier for the event
+- `controller_name` (TEXT) - Name of the controller
+- `device_id` (TEXT) - Controller device ID (indexed)
+- `zone_name` (TEXT) - Name of the zone
+- `duration_seconds` (INTEGER) - How long the zone ran
+- `end_time` (INTEGER) - When the zone ended (Unix timestamp in milliseconds, indexed)
+- `end_time_datetime` (TEXT) - Human-readable end time
+- `csv_written_datetime` (TEXT) - When this data was written
+- `topic` (TEXT) - Event topic category
+- `summary` (TEXT) - Human-readable event summary
+- `created_at` (TIMESTAMP) - When the record was inserted into database
+
+#### Querying the Database
+
+You can query the database using any SQLite tool or Python:
+
+```python
+from src.sql_storage import SQLStorage
+
+# Initialize storage
+db = SQLStorage('data/rachio_events.db')
+
+# Get all events for a specific controller
+events = db.get_events(controller_name="Front Yard Controller")
+
+# Get recent events (last 100)
+recent_events = db.get_events(limit=100)
+
+# Get events in a time range
+events = db.get_events(
+    start_time=1640000000000,  # Unix timestamp in milliseconds
+    end_time=1650000000000
+)
+
+# Get summary statistics
+stats = db.get_summary_stats()
+print(f"Total events: {stats['total_events']}")
+print(f"Total controllers: {stats['total_controllers']}")
+print(f"Events by controller: {stats['events_by_controller']}")
+
+# Export database to CSV
+db.export_to_csv('data/export.csv')
+```
+
+Or use the SQLite command-line tool:
+
+```bash
+# Open the database
+sqlite3 data/rachio_events.db
+
+# Example queries
+SELECT COUNT(*) FROM zone_events;
+SELECT controller_name, COUNT(*) FROM zone_events GROUP BY controller_name;
+SELECT zone_name, SUM(duration_seconds)/60 as total_minutes FROM zone_events GROUP BY zone_name;
+SELECT * FROM zone_events WHERE zone_name = 'Front Lawn' ORDER BY end_time DESC LIMIT 10;
+```
+
+#### Benefits of SQL Storage
+
+- **Faster queries**: Indexed fields for quick filtering and searching
+- **Better for large datasets**: Handles millions of events efficiently
+- **Advanced analytics**: Use SQL for complex queries and aggregations
+- **No duplicates**: Automatic duplicate detection via primary key
+- **Relational queries**: Easy to join with other data sources
+- **Data integrity**: Database constraints ensure data consistency
+
 ## Scheduling Automatic Data Collection
 
 ### Using Cron (Linux/Mac)
@@ -215,12 +307,12 @@ The Rachio API allows a maximum of **3,500 requests per day** across all endpoin
 
 ## Future Enhancements
 
-- Automatic upload to web-hosted SQL database (single table design ready)
+- Remote database support (PostgreSQL, MySQL)
 - Real-time data collection using webhooks
-- Data visualization and reporting
 - Support for flow meter data analysis
-- Water usage analytics
+- Water usage analytics and trends
 - Automated anomaly detection (e.g., leaks, unusual watering patterns)
+- REST API for querying event data
 
 ## Project Structure
 
@@ -234,12 +326,14 @@ rachio-data-fetch/
 ├── requirements.txt         # Python dependencies
 ├── README.md               # This file
 ├── data/                   # Output files (not in git)
-│   ├── events.csv          # All controller events (single file)
-│   └── devices.json        # All device information
+│   ├── events.csv          # All controller events (single CSV file)
+│   ├── devices.json        # All device information
+│   └── rachio_events.db    # SQLite database (if SQL storage enabled)
 └── src/
     ├── __init__.py
     ├── rachio_client.py    # Rachio API client
-    └── csv_storage.py      # CSV storage handler
+    ├── csv_storage.py      # CSV storage handler
+    └── sql_storage.py      # SQL database storage handler
 ```
 
 ## Troubleshooting

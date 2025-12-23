@@ -13,6 +13,7 @@ from typing import Optional
 
 from src.rachio_client import RachioClient, datetime_to_epoch_ms
 from src.csv_storage import CSVStorage
+from src.sql_storage import SQLStorage
 
 
 def load_config(config_path: str = "config.json") -> dict:
@@ -35,14 +36,26 @@ def fetch_and_save_data(
     incremental: bool = False
 ):
     """
-    Fetch zone run data from all configured controllers and save to a single CSV file.
+    Fetch zone run data from all configured controllers and save to CSV and/or SQL database.
 
     Args:
         config: Configuration dictionary
         days: Number of days of historical data to fetch (default: 7)
         incremental: If True, only fetch new data since last run (default: False)
     """
-    storage = CSVStorage(config.get('output_directory', 'data'))
+    # Initialize storage handlers based on configuration
+    storage_mode = config.get('storage_mode', 'both')  # 'csv', 'sql', or 'both'
+
+    csv_storage = None
+    sql_storage = None
+
+    if storage_mode in ['csv', 'both']:
+        csv_storage = CSVStorage(config.get('output_directory', 'data'))
+
+    if storage_mode in ['sql', 'both']:
+        database_path = config.get('database_path', 'data/rachio_events.db')
+        sql_storage = SQLStorage(database_path)
+
     base_url = config.get('base_url', 'https://api.rach.io/1')
 
     controllers = config.get('controllers', [])
@@ -55,7 +68,11 @@ def fetch_and_save_data(
     csv_filepath = f"{config.get('output_directory', 'data')}/{csv_filename}"
 
     print(f"Fetching data for {len(controllers)} controller(s)...")
-    print(f"Output file: {csv_filepath}")
+    print(f"Storage mode: {storage_mode}")
+    if csv_storage:
+        print(f"CSV output: {csv_filepath}")
+    if sql_storage:
+        print(f"Database: {config.get('database_path', 'data/rachio_events.db')}")
 
     all_events = []
     summary_by_controller = {}
@@ -87,8 +104,15 @@ def fetch_and_save_data(
             end_time = datetime_to_epoch_ms(datetime.now())
 
             if incremental:
-                # Get last event time for this specific device from the shared CSV
-                last_event_time = storage.get_latest_event_time(csv_filepath, device_id)
+                # Get last event time from SQL or CSV (prefer SQL if available)
+                last_event_time = None
+
+                if sql_storage:
+                    last_event_time = sql_storage.get_latest_event_time(device_id)
+
+                if not last_event_time and csv_storage:
+                    last_event_time = csv_storage.get_latest_event_time(csv_filepath, device_id)
+
                 if last_event_time:
                     start_time = last_event_time + 1  # Start from 1ms after last event
                     print(f"Incremental fetch from {datetime.fromtimestamp(start_time/1000)}")
@@ -143,16 +167,22 @@ def fetch_and_save_data(
             traceback.print_exc()
             continue
 
-    # Save all events to single CSV file
+    # Save all events to CSV and/or SQL
     if all_events:
         print(f"\n{'='*60}")
-        print(f"Saving {len(all_events)} total events to CSV...")
+        print(f"Saving {len(all_events)} total events...")
         print(f"{'='*60}")
 
-        if incremental and storage.get_latest_event_time(csv_filepath):
-            storage.append_zone_events(all_events, csv_filepath)
-        else:
-            storage.save_zone_events(all_events, "all_controllers", csv_filename)
+        # Save to CSV if enabled
+        if csv_storage:
+            if incremental and csv_storage.get_latest_event_time(csv_filepath):
+                csv_storage.append_zone_events(all_events, csv_filepath)
+            else:
+                csv_storage.save_zone_events(all_events, "all_controllers", csv_filename)
+
+        # Save to SQL if enabled
+        if sql_storage:
+            sql_storage.save_zone_events(all_events)
 
         # Print overall summary
         print("\n" + "="*60)
