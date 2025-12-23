@@ -8,6 +8,9 @@ Automatically collect and store station run time data from Rachio water controll
 - Store data in CSV format for easy analysis
 - Support for incremental data collection (only fetch new data)
 - Configurable time ranges for historical data retrieval
+- Automatic request chunking to handle API time range limits
+- Duplicate event detection and prevention
+- Device discovery utility to find controller IDs
 - Designed for easy migration to SQL database in the future
 
 ## Prerequisites
@@ -61,7 +64,15 @@ Edit `config.json` with your controller information:
 }
 ```
 
-**Note:** To find your `device_id`, you can use the Rachio API or check the device settings in the mobile app.
+### Finding Your Device ID
+
+To find your `device_id`, use the included utility script:
+
+```bash
+python3 get_device_info.py
+```
+
+This will prompt you for your API key and display all your devices with their IDs, names, models, and zone information.
 
 ## Usage
 
@@ -80,6 +91,8 @@ Fetch data for a specific number of days:
 ```bash
 python main.py --days 30
 ```
+
+**Note:** The Rachio API has a 35-day maximum time range limit per request. The script automatically chunks larger requests into multiple API calls, so you can safely request any time range (e.g., `--days 365`).
 
 ### Incremental Updates
 
@@ -105,7 +118,7 @@ python main.py --days 14 --incremental
 
 ## Output
 
-All data from all controllers is saved to a **single CSV file**: `data/rachio_zone_runs.csv` (directory configurable in `config.json`).
+All data from all controllers is saved to a **single CSV file**: `data/events.csv` (directory configurable in `config.json`).
 
 This single-file approach makes it easy to:
 - Query across all controllers and zones
@@ -116,18 +129,15 @@ This single-file approach makes it easy to:
 ### CSV Columns
 
 - `controller_name`: Name of the controller (from config.json)
-- `event_id`: Unique identifier for the event
-- `event_type`: Type of event (STARTED, COMPLETED, STOPPED)
 - `device_id`: Controller device ID
-- `zone_id`: Unique zone identifier
-- `zone_number`: Zone number (1, 2, 3, etc.)
-- `zone_name`: Name of the zone (e.g., "Front Lawn")
+- `zone_name`: Name of the zone (e.g., "Front Lawn", "Zone 2")
 - `duration_seconds`: How long the zone ran in seconds
-- `start_time`: When the zone started (Unix timestamp in milliseconds)
 - `end_time`: When the zone ended (Unix timestamp in milliseconds)
-- `event_date`: Event timestamp
-- `create_date`: When the event was created
-- `flow_volume_gallons`: Water volume in gallons (if flow meter is configured)
+- `end_time_datetime`: Human-readable end time (YYYY-MM-DD HH:MM:SS)
+- `csv_written_datetime`: When this data was written to CSV (YYYY-MM-DD HH:MM:SS)
+- `topic`: Event topic category (e.g., "WATERING")
+- `summary`: Human-readable event summary from API
+- `event_id`: Unique identifier for the event
 
 ## Scheduling Automatic Data Collection
 
@@ -166,11 +176,13 @@ The Rachio API allows a maximum of **3,500 requests per day** across all endpoin
 ```
 rachio-data-fetch/
 ├── main.py                  # Main script
+├── get_device_info.py       # Device discovery utility
 ├── config.json              # Your configuration (not in git)
 ├── config.json.example      # Configuration template
 ├── requirements.txt         # Python dependencies
 ├── README.md               # This file
 ├── data/                   # Output CSV files (not in git)
+│   └── events.csv          # All controller events (single file)
 └── src/
     ├── __init__.py
     ├── rachio_client.py    # Rachio API client
@@ -186,7 +198,13 @@ Make sure you've copied `config.json.example` to `config.json` and added your AP
 Verify that your API key is correct. You can regenerate it in the Rachio mobile app.
 
 ### "Device not found" or 404 errors
-Verify that your `device_id` is correct.
+Verify that your `device_id` is correct. Use `python3 get_device_info.py` to find the correct device ID.
+
+### HTTP 400 errors with large time ranges
+The script automatically handles this by chunking requests into 35-day segments. If you still see errors, try a smaller time range.
+
+### Zone names appear as "Zone 1", "Zone 2", etc.
+The API event data only provides zone names as they were at the time of the event. If you renamed a zone, historical events will show the old name. The zone_name field reflects what the Rachio API returns in the event summary.
 
 ## Contributing
 
