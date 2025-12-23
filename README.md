@@ -5,7 +5,8 @@ Automatically collect and store station run time data from Rachio water controll
 ## Features
 
 - Fetch zone/station run time data from multiple Rachio controllers
-- Store data in CSV format for easy analysis
+- Store event data in CSV format for easy analysis
+- Fetch and store comprehensive device information in JSON format
 - Support for incremental data collection (only fetch new data)
 - Configurable time ranges for historical data retrieval
 - Automatic request chunking to handle API time range limits
@@ -76,6 +77,21 @@ This will prompt you for your API key and display all your devices with their ID
 
 ## Usage
 
+### Fetch Device Information
+
+Fetch detailed device information for all configured controllers and save to JSON:
+
+```bash
+python fetch_devices.py
+```
+
+This will create a `data/devices.json` file containing comprehensive information about each controller including:
+- Device ID, name, model, and status
+- Zone configuration and details
+- Scheduling information
+- Hardware specifications
+- Location and timezone data
+
 ### Basic Usage
 
 Fetch the last 7 days of zone run data for all configured controllers:
@@ -118,7 +134,9 @@ python main.py --days 14 --incremental
 
 ## Output
 
-All data from all controllers is saved to a **single CSV file**: `data/events.csv` (directory configurable in `config.json`).
+### Event Data (CSV)
+
+All event data from all controllers is saved to a **single CSV file**: `data/events.csv` (directory configurable in `config.json`).
 
 This single-file approach makes it easy to:
 - Query across all controllers and zones
@@ -126,7 +144,7 @@ This single-file approach makes it easy to:
 - Analyze watering patterns across your entire system
 - No file size concerns (CSV files can handle millions of rows)
 
-### CSV Columns
+#### CSV Columns
 
 - `controller_name`: Name of the controller (from config.json)
 - `device_id`: Controller device ID
@@ -138,6 +156,39 @@ This single-file approach makes it easy to:
 - `topic`: Event topic category (e.g., "WATERING")
 - `summary`: Human-readable event summary from API
 - `event_id`: Unique identifier for the event
+
+### Device Information (JSON)
+
+Device information is saved to `data/devices.json` with the following structure:
+
+```json
+{
+  "metadata": {
+    "total_devices": 15,
+    "generated_at": "2025-12-17T23:52:01.392142",
+    "description": "Device information from Rachio API for all configured controllers"
+  },
+  "devices": [
+    {
+      "id": "device-id-here",
+      "name": "Controller Name",
+      "model": "GENERATION3_8ZONE",
+      "status": "ONLINE",
+      "zones": [...],
+      "schedules": [...],
+      "config_name": "Name from config.json",
+      "fetched_at": "2025-12-17T23:52:01.392142"
+    }
+  ]
+}
+```
+
+Each device includes comprehensive information such as:
+- Device metadata (ID, name, model, serial number, status)
+- All zone configurations with detailed settings
+- Schedule information
+- Location and timezone data
+- Hardware and firmware details
 
 ## Scheduling Automatic Data Collection
 
@@ -175,14 +226,16 @@ The Rachio API allows a maximum of **3,500 requests per day** across all endpoin
 
 ```
 rachio-data-fetch/
-├── main.py                  # Main script
+├── main.py                  # Main script for fetching zone run events
+├── fetch_devices.py         # Script to fetch all device information to JSON
 ├── get_device_info.py       # Device discovery utility
 ├── config.json              # Your configuration (not in git)
 ├── config.json.example      # Configuration template
 ├── requirements.txt         # Python dependencies
 ├── README.md               # This file
-├── data/                   # Output CSV files (not in git)
-│   └── events.csv          # All controller events (single file)
+├── data/                   # Output files (not in git)
+│   ├── events.csv          # All controller events (single file)
+│   └── devices.json        # All device information
 └── src/
     ├── __init__.py
     ├── rachio_client.py    # Rachio API client
