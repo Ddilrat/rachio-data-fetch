@@ -5,7 +5,11 @@ Automatically collect and store station run time data from Rachio water controll
 ## Features
 
 - Fetch zone/station run time data from multiple Rachio controllers
+<<<<<<< HEAD
 - Store event data in CSV format and/or SQLite database
+=======
+- Store event data in CSV format for easy analysis
+>>>>>>> 225af79 (committed)
 - Fetch and store comprehensive device information in JSON format
 - Support for incremental data collection (only fetch new data)
 - Configurable time ranges for historical data retrieval
@@ -145,6 +149,7 @@ python main.py --days 14 --incremental
 
 ## Output
 
+<<<<<<< HEAD
 ### Storage Modes
 
 The application can store data in three different modes (configured via `storage_mode` in [config.json](config.json)):
@@ -156,6 +161,11 @@ The application can store data in three different modes (configured via `storage
 ### Event Data (CSV)
 
 When CSV storage is enabled, all event data from all controllers is saved to a **single CSV file**: `data/events.csv` (directory configurable in `config.json`).
+=======
+### Event Data (CSV)
+
+All event data from all controllers is saved to a **single CSV file**: `data/events.csv` (directory configurable in `config.json`).
+>>>>>>> 225af79 (committed)
 
 This single-file approach makes it easy to:
 - Query across all controllers and zones
@@ -209,6 +219,7 @@ Each device includes comprehensive information such as:
 - Location and timezone data
 - Hardware and firmware details
 
+<<<<<<< HEAD
 ### Event Data (SQL Database)
 
 When SQL storage is enabled, events are stored in a SQLite database at the path specified by `database_path` in [config.json](config.json) (default: `data/rachio_events.db`).
@@ -282,6 +293,8 @@ SELECT * FROM zone_events WHERE zone_name = 'Front Lawn' ORDER BY end_time DESC 
 - **Relational queries**: Easy to join with other data sources
 - **Data integrity**: Database constraints ensure data consistency
 
+=======
+>>>>>>> 225af79 (committed)
 ## Scheduling Automatic Data Collection
 
 ### Using Cron (Linux/Mac)
@@ -326,9 +339,14 @@ rachio-data-fetch/
 ├── requirements.txt         # Python dependencies
 ├── README.md               # This file
 ├── data/                   # Output files (not in git)
+<<<<<<< HEAD
 │   ├── events.csv          # All controller events (single CSV file)
 │   ├── devices.json        # All device information
 │   └── rachio_events.db    # SQLite database (if SQL storage enabled)
+=======
+│   ├── events.csv          # All controller events (single file)
+│   └── devices.json        # All device information
+>>>>>>> 225af79 (committed)
 └── src/
     ├── __init__.py
     ├── rachio_client.py    # Rachio API client
