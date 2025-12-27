@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h1>About This Application</h1>
+</div>
+
+<div class="content-section">
+    <h2>Technology Stack</h2>
+    <ul>
+        <li><strong>Python 3.14</strong> - Latest Python runtime</li>
+        <li><strong>Flask</strong> - Micro web framework</li>
+        <li><strong>Gunicorn</strong> - Production WSGI server</li>
+        <li><strong>Azure Web Apps</strong> - Cloud hosting platform</li>
+    </ul>
+
+    <h2>Features</h2>
+    <ul>
+        <li>Responsive design that works on all devices</li>
+        <li>Health check endpoint for monitoring</li>
+        <li>Error handling with custom error pages</li>
+        <li>Production-ready configuration</li>
+    </ul>
+
+    <h2>Deployment</h2>
+    <p>This application is configured for easy deployment to Azure Web Apps using the Python 3.14 runtime stack.</p>
+</div>
+{% endblock %}
